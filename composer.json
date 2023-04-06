@@ -3,7 +3,8 @@
   "description": "WelineFramework cron(计划任务)",
   "type": "weline-module",
   "require": {
-    "php": "^8.0"
+    "php": "^8.1",
+    "mtdowling/cron-expression": "^1.2"
   },
   "authors": [
     {
