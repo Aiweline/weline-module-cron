@@ -29,7 +29,8 @@ class Run implements CommandInterface
 
     public function __construct(
         CronTask $cronTask
-    ) {
+    )
+    {
         $this->cronTask = $cronTask;
     }
 
@@ -68,7 +69,7 @@ class Run implements CommandInterface
                     $taskModel->setData($taskModel::fields_STATUS, CronStatus::BLOCK->value);
                     $taskModel->setData($taskModel::fields_RUN_TIME, $task_start_time);
                     $taskModel->setData($taskModel::fields_RUN_DATE, $task_run_date);
-                    $taskModel->save();
+                    $taskModel->save(true);
                     /**@var \Weline\Cron\CronTaskInterface $task */
                     $task = ObjectManager::getInstance($taskModel->getData('class'));
                     $task->execute();
@@ -92,7 +93,7 @@ class Run implements CommandInterface
                                 $taskModel->setData($taskModel::fields_BLOCK_TIMES, (int)$taskModel->getData($taskModel::fields_BLOCK_TIMES) + 1);
                                 $taskModel->setData($taskModel::fields_STATUS, CronStatus::PENDING->value);
                                 $taskModel->setData($taskModel::fields_RUNTIME_ERROR_DATE, date('Y-m-d H:i:s'));
-                                $taskModel->setData($taskModel::fields_RUNTIME_ERROR, "任务调度系统：调度任务阻塞超时自动解锁，请查看任务调度设置是否合理！");
+                                $taskModel->setData($taskModel::fields_RUNTIME_ERROR, '任务调度系统：调度任务阻塞超时自动解锁，请查看任务调度设置是否合理！');
                             }
                         }
                     }
@@ -104,7 +105,7 @@ class Run implements CommandInterface
             $taskModel->setData($taskModel::fields_NEXT_RUN_DATE, $cron->getNextRunDate()->format('Y-m-d H:i:s'));
             $taskModel->setData($taskModel::fields_MAX_NEXT_RUN_DATE, $cron->getNextRunDate('now', 3)->format('Y-m-d H:i:s'));
             $taskModel->setData($taskModel::fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
-            $taskModel->save();
+            $taskModel->save(true);
         }
     }
 
