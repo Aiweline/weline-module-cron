@@ -99,6 +99,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                 <lang>调度任务</lang>
                                             </th>
                                             <th>
+                                                <lang>执行名</lang>
+                                            </th>
+                                            <th>
                                                 <lang>模组</lang>
                                             </th>
                                             <th>
@@ -160,6 +163,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             <tr>
                                                 <td>{{task.id}}</td>
                                                 <td>{{task.name}}</td>
+                                                <td>{{task.execute_name}}</td>
                                                 <td>{{task.module}}</td>
                                                 <td>{{task.class}}</td>
                                                 <td>{{task.cron_time}}</td>
@@ -233,7 +237,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <div class="col-sm-6">
                         <div class="text-sm-end d-none d-sm-block">
                             Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
-                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                                href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
                         </div>
                     </div>
                 </div>

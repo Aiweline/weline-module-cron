@@ -18,7 +18,7 @@ namespace Weline\Cron;
 interface CronTaskInterface
 {
     /**
-     * @DESC          # 调度任务名
+     * @DESC          # 调度任务名【用于系统】
      *
      * @AUTH    秋枫雁飞
      * @EMAIL aiweline@qq.com
@@ -27,6 +27,16 @@ interface CronTaskInterface
      * @return string
      */
     function name(): string;
+    /**
+     * @DESC          # 执行名
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2022/10/30 1:35
+     * 参数区：
+     * @return string
+     */
+    function execute_name(): string;
 
     /**
      * @DESC          # 任务描述

@@ -20,24 +20,25 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class CronTask extends \Weline\Framework\Database\Model
 {
-    public const fields_NAME                 = 'name';
-    public const fields_MODULE               = 'module';
-    public const fields_CLASS                = 'class';
-    public const fields_TIP                  = 'tip';
-    public const fields_CRON_TIME            = 'cron_time';
-    public const fields_STATUS               = 'status';
-    public const fields_RUNTIME              = 'runtime';
-    public const fields_BLOCK_TIME           = 'block_time';
-    public const fields_BLOCK_TIMES          = 'block_times';
+    public const fields_NAME = 'name';
+    public const fields_EXECUTE_NAME = 'execute_name';
+    public const fields_MODULE = 'module';
+    public const fields_CLASS = 'class';
+    public const fields_TIP = 'tip';
+    public const fields_CRON_TIME = 'cron_time';
+    public const fields_STATUS = 'status';
+    public const fields_RUNTIME = 'runtime';
+    public const fields_BLOCK_TIME = 'block_time';
+    public const fields_BLOCK_TIMES = 'block_times';
     public const fields_BLOCK_UNLOCK_TIMEOUT = 'block_unlock_timeout';
-    public const fields_RUN_TIME             = 'run_time';
-    public const fields_RUN_DATE             = 'run_date';
-    public const fields_NEXT_RUN_DATE        = 'next_run_date';
-    public const fields_MAX_NEXT_RUN_DATE    = 'max_next_run_date';
-    public const fields_PRE_RUN_DATE         = 'pre_run_date';
-    public const fields_RUN_TIMES            = 'run_times';
-    public const fields_RUNTIME_ERROR        = 'runtime_error';
-    public const fields_RUNTIME_ERROR_DATE   = 'runtime_error_date';
+    public const fields_RUN_TIME = 'run_time';
+    public const fields_RUN_DATE = 'run_date';
+    public const fields_NEXT_RUN_DATE = 'next_run_date';
+    public const fields_MAX_NEXT_RUN_DATE = 'max_next_run_date';
+    public const fields_PRE_RUN_DATE = 'pre_run_date';
+    public const fields_RUN_TIMES = 'run_times';
+    public const fields_RUNTIME_ERROR = 'runtime_error';
+    public const fields_RUNTIME_ERROR_DATE = 'runtime_error_date';
 
     /**
      * @inheritDoc
@@ -65,6 +66,7 @@ class CronTask extends \Weline\Framework\Database\Model
             $setup->createTable()
                   ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', 'ID')
                   ->addColumn(self::fields_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', '调度任务名')
+                  ->addColumn(self::fields_EXECUTE_NAME, TableInterface::column_type_VARCHAR, 255, 'not null unique', '执行名')
                   ->addColumn(self::fields_MODULE, TableInterface::column_type_VARCHAR, 128, 'not null', '模组')
                   ->addColumn(self::fields_CLASS, TableInterface::column_type_VARCHAR, 255, 'not null', 'PHP调度类')
                   ->addColumn(self::fields_CRON_TIME, TableInterface::column_type_VARCHAR, 64, 'not null', '调度频率')

@@ -20,6 +20,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
 
+
 class Run implements CommandInterface
 {
     /**
@@ -45,24 +46,27 @@ class Run implements CommandInterface
         if (!is_bool($force)) {
             unset($task_names[$force]);
             # 解锁任务
-            $this->cronTask->where($this->cronTask::fields_NAME, $task_names)->update(['status' => CronStatus::PENDING->value])->fetch();
+            $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $task_names)->update(['status' => CronStatus::PENDING->value])->fetch();
+
             if ($task_names) {
-                $this->cronTask->where($this->cronTask::fields_NAME, $task_names);
+                $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $task_names);
             }
             $this->cronTask->update(['status' => CronStatus::PENDING->value])->fetch();
         }
         # 读取给定的任务
         if ($task_names) {
-            $this->cronTask->where($this->cronTask::fields_NAME, $task_names);
+            $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $task_names);
         }
+
         $tasks = $this->cronTask->select()->fetch()->getItems();
+
         /**@var CronTask $taskModel */
         foreach ($tasks as $taskModel) {
             $task_start_time = microtime(true);
             $task_run_date   = date('Y-m-d H:i:s');
             # 上锁
             $cron = CronExpression::factory($taskModel->getData('cron_time'));
-            if ($cron->isDue($task_run_date)) {
+            if ($force||$cron->isDue($task_run_date)) {
                 if ($taskModel->getData($taskModel::fields_STATUS) !== CronStatus::BLOCK->value) {
                     # 设置程序运行数据
                     # 上锁
