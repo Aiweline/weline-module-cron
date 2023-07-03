@@ -22,10 +22,11 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
         #生成shell脚本
         $base_project_dir     = BP;
         $cron_shell_file_path = Env::path_framework_generated . $name . '-cron.sh';
+        $php_binary = PHP_BINARY;
         $shell_string         = "
 #!/bin/sh
 cd $base_project_dir &&
-php bin/m cron:task:run
+$php_binary bin/m cron:task:run
         ";
         file_put_contents($cron_shell_file_path, $shell_string);
         if (is_string($name) && !empty($name) && $this->exist($name) === false) {

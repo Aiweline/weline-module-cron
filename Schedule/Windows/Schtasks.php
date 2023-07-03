@@ -35,10 +35,11 @@ class Schtasks implements \Weline\Cron\Schedule\ScheduleInterface
             $base_project_dir       = BP;
             $base_project_disk_name = substr($base_project_dir, 0, 2);
             # FIXME bat弹窗问题 有vbs版本可以解决此问题，先不处理
+            $php_binary = PHP_BINARY;
             $bat_string = "
 @echo off
 Rem WelineFramework框架 Window计划任务脚本
-$base_project_disk_name && cd $base_project_dir && php bin/m cron:task:run
+$base_project_disk_name && cd $base_project_dir && $php_binary bin/m cron:task:run
 ";
             $bat_file   = Env::path_framework_generated . $name . '-cron.bat';
             file_put_contents($bat_file, $bat_string);
