@@ -107,6 +107,8 @@ class Run implements CommandInterface
                         $exitCode = proc_close($process);
                         // 根据需要处理输出或退出码
                         // 继续执行其他任务或退出
+                    }else{
+                        $taskModel->setData($taskModel::fields_RUNTIME_ERROR, __('进程创建失败！请检查进程状态！'));
                     }
                 } else {
                     # 设置程序运行数据
