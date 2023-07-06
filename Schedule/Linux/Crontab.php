@@ -42,7 +42,8 @@ $php_binary bin/m cron:task:run
     public function run(string $name): array
     {
         $base_project_dir = BP;
-        exec("cd $base_project_dir && php bin/m cron:task:run", $output);
+        $php_binary = PHP_BINARY;
+        exec("cd $base_project_dir && $php_binary bin/m cron:task:run", $output);
         return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功运行!', $name), 'result' => $output];
     }
 
