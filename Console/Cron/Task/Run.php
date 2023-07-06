@@ -131,20 +131,19 @@ class Run implements CommandInterface
                 $taskModel->setData($taskModel::fields_STATUS, CronStatus::PENDING->value);
             }
             # 如果有进程PID，检测是否运行结束
-            if($pid=$taskModel->getData($taskModel::fields_PID)&&($taskModel->getData($taskModel::fields_STATUS) !== CronStatus::SUCCESS->value)){
+            if($pid=$taskModel->getData($taskModel::fields_PID)){
                 $task_end_time = microtime(true) - $task_start_time;
                 $isRunning = posix_kill($pid, 0);
                 if ($isRunning) {
                     $taskModel->setData($taskModel::fields_BLOCK_TIME, $task_start_time - $run_time);
-                } else {
+                } elseif($taskModel->getData($taskModel::fields_STATUS) !== CronStatus::SUCCESS->value){
+                    $taskModel->setData($taskModel::fields_RUN_TIMES, (int)$taskModel->getData($taskModel::fields_RUN_TIMES) + 1);
                     # 设置程序运行数据
                     $taskModel->setData($taskModel::fields_BLOCK_TIME, 0);
                     # 解锁
                     $taskModel->setData($taskModel::fields_STATUS, CronStatus::SUCCESS->value);
                     $taskModel->setData($taskModel::fields_RUNTIME, $task_end_time);
-                    $taskModel->setData($taskModel::fields_RUN_TIMES, (int)$taskModel->getData($taskModel::fields_RUN_TIMES) + 1);
                 }
-                $taskModel->save();
             }
             # 设置程序运行数据
             $taskModel->setData($taskModel::fields_NEXT_RUN_DATE, $cron->getNextRunDate()->format('Y-m-d H:i:s'));
