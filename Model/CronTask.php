@@ -39,6 +39,7 @@ class CronTask extends \Weline\Framework\Database\Model
     public const fields_RUN_TIMES = 'run_times';
     public const fields_RUNTIME_ERROR = 'runtime_error';
     public const fields_RUNTIME_ERROR_DATE = 'runtime_error_date';
+    public const fields_PID = 'pid';
 
     /**
      * @inheritDoc
@@ -61,7 +62,7 @@ class CronTask extends \Weline\Framework\Database\Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
-//        $setup->dropTable();
+        $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->createTable()
                   ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', 'ID')
@@ -84,6 +85,8 @@ class CronTask extends \Weline\Framework\Database\Model
                   ->addColumn(self::fields_TIP, TableInterface::column_type_TEXT, 0, '', '任务描述')
                   ->addColumn(self::fields_RUNTIME_ERROR, TableInterface::column_type_TEXT, 0, '', '运行时错误')
                   ->addColumn(self::fields_RUNTIME_ERROR_DATE, TableInterface::column_type_DATETIME, 0, '', '运行时错误发生时间')
+                  ->addColumn(self::fields_PID, TableInterface::column_type_INTEGER, 0, '', '运行时进程ID')
+                  ->addIndex(TableInterface::index_type_UNIQUE, 'UNIQUE_EXECUTE_NAME', self::fields_EXECUTE_NAME)
                   ->addIndex(TableInterface::index_type_UNIQUE, 'UNIQUE_TASK_NAME', self::fields_NAME)
                   ->create();
         }

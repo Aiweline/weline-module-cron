@@ -13,12 +13,14 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Console\Cron\Task;
 
+use Aiweline\KteInventory\Model\SiteCronTask;
 use Cron\CronExpression;
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Model\CronTask;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Output\Cli\Printing;
 
 
 class Run implements CommandInterface
@@ -41,33 +43,41 @@ class Run implements CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         array_shift($args);
-        $force      = array_search('-f', $args);
+        $force = is_int(array_search('-f', $args));
+        foreach ($args as $key => $arg) {
+            if ($arg == '-f') {
+                unset($args[$key]);
+            }
+        }
         $task_names = $args;
         if (!is_bool($force)) {
-            unset($task_names[$force]);
             # 解锁任务
-            $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $task_names)->update(['status' => CronStatus::PENDING->value])->fetch();
-
-            if ($task_names) {
-                $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $task_names);
+            if (empty($task_names)) {
+                ObjectManager::getInstance(Printing::class)->error(__('请指定要执行的任务！php bin/m cron:task:run demo -f'));
+                die;
             }
-            $this->cronTask->update(['status' => CronStatus::PENDING->value])->fetch();
         }
         # 读取给定的任务
         if ($task_names) {
-            $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $task_names);
+            foreach ($task_names as $taskName) {
+                $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $taskName);
+            }
         }
 
         $tasks = $this->cronTask->select()->fetch()->getItems();
-
         /**@var CronTask $taskModel */
+        $descriptorspec = array(
+            0 => array('pipe', 'r'),   // 子进程将从此管道读取stdin
+            1 => array('pipe', 'w'),   // 子进程将向此管道写入stdout
+            2 => array('pipe', 'w')    // 子进程将向此管道写入stderr
+        );
         foreach ($tasks as $taskModel) {
             $task_start_time = microtime(true);
             $task_run_date   = date('Y-m-d H:i:s');
             # 上锁
             $cron = CronExpression::factory($taskModel->getData('cron_time'));
-            if ($force||$cron->isDue($task_run_date)) {
-                if ($taskModel->getData($taskModel::fields_STATUS) !== CronStatus::BLOCK->value) {
+            if ($force || $cron->isDue($task_run_date)) {
+                if ($force || $taskModel->getData($taskModel::fields_STATUS) !== CronStatus::BLOCK->value) {
                     # 设置程序运行数据
                     # 上锁
                     $taskModel->setData($taskModel::fields_STATUS, CronStatus::BLOCK->value);
@@ -76,15 +86,28 @@ class Run implements CommandInterface
                     $taskModel->save(true);
                     /**@var \Weline\Cron\CronTaskInterface $task */
                     $task = ObjectManager::getInstance($taskModel->getData('class'));
-                    $task->execute();
-                    $task_end_time = microtime(true) - $task_start_time;
-
-                    # 设置程序运行数据
-                    $taskModel->setData($taskModel::fields_BLOCK_TIME, 0);
-                    # 解锁
-                    $taskModel->setData($taskModel::fields_STATUS, CronStatus::SUCCESS->value);
-                    $taskModel->setData($taskModel::fields_RUNTIME, $task_end_time);
-                    $taskModel->setData($taskModel::fields_RUN_TIMES, (int)$taskModel->getData($taskModel::fields_RUN_TIMES) + 1);
+                    # 创建异步程序
+                    $command = 'cd ' . BP . ' && ' . PHP_BINARY . ' bin/m cron:task:run ' . $task->execute_name();
+                    $process = proc_open($command, $descriptorspec, $pipes);
+                    if (is_resource($process)) {
+                        $status = proc_get_status($process);
+                        $pid    = $status['pid'];
+                        # 记录PID
+                        $taskModel->setData($taskModel::fields_PID, $pid)
+                                  ->save();
+                        // 命令已成功作为异步进程执行
+                        // 关闭不需要的管道
+                        fclose($pipes[0]);
+                        // 读取子进程的输出（如果需要）
+                        $output = stream_get_contents($pipes[1]);
+                        // 关闭剩余的管道
+                        fclose($pipes[1]);
+                        fclose($pipes[2]);
+                        // 等待进程结束（如果需要）
+                        $exitCode = proc_close($process);
+                        // 根据需要处理输出或退出码
+                        // 继续执行其他任务或退出
+                    }
                 } else {
                     # 设置程序运行数据
                     if ($run_time = $taskModel->getData($taskModel::fields_RUN_TIME)) {
@@ -104,6 +127,22 @@ class Run implements CommandInterface
                 }
             } else {
                 $taskModel->setData($taskModel::fields_STATUS, CronStatus::PENDING->value);
+            }
+            # 如果有进程PID，检测是否运行结束
+            if($pid=$taskModel->getData($taskModel::fields_PID)&&($taskModel->getData($taskModel::fields_STATUS) !== CronStatus::SUCCESS->value)){
+                $task_end_time = microtime(true) - $task_start_time;
+                $isRunning = posix_kill($pid, 0);
+                if ($isRunning) {
+                    $taskModel->setData($taskModel::fields_BLOCK_TIME, $task_start_time - $run_time);
+                } else {
+                    # 设置程序运行数据
+                    $taskModel->setData($taskModel::fields_BLOCK_TIME, 0);
+                    # 解锁
+                    $taskModel->setData($taskModel::fields_STATUS, CronStatus::SUCCESS->value);
+                    $taskModel->setData($taskModel::fields_RUNTIME, $task_end_time);
+                    $taskModel->setData($taskModel::fields_RUN_TIMES, (int)$taskModel->getData($taskModel::fields_RUN_TIMES) + 1);
+                }
+                $taskModel->save();
             }
             # 设置程序运行数据
             $taskModel->setData($taskModel::fields_NEXT_RUN_DATE, $cron->getNextRunDate()->format('Y-m-d H:i:s'));
