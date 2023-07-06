@@ -143,6 +143,8 @@ class Run implements CommandInterface
                     # 解锁
                     $taskModel->setData($taskModel::fields_STATUS, CronStatus::SUCCESS->value);
                     $taskModel->setData($taskModel::fields_RUNTIME, $task_end_time);
+                    # 运行完毕将进程ID设置为0
+                    $taskModel->setData($taskModel::fields_PID, 0);
                 }
             }
             # 设置程序运行数据
