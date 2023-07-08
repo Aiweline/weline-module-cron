@@ -122,6 +122,10 @@ class Run implements CommandInterface
                 $run_time        = $taskModel->getData($taskModel::fields_RUN_TIME) ?? 0;
                 # 上锁
                 $cron = CronExpression::factory($taskModel->getData('cron_time'));
+                # 设置程序预计数据
+                $taskModel->setData($taskModel::fields_NEXT_RUN_DATE, $cron->getNextRunDate()->format('Y-m-d H:i:s'));
+                $taskModel->setData($taskModel::fields_MAX_NEXT_RUN_DATE, $cron->getNextRunDate('now', 3)->format('Y-m-d H:i:s'));
+                $taskModel->setData($taskModel::fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
                 if ($force || $cron->isDue($task_run_date)) {
                     if ($force || $taskModel->getData($taskModel::fields_STATUS) !== CronStatus::BLOCK->value) {
                         # 设置程序运行数据
@@ -184,14 +188,10 @@ class Run implements CommandInterface
                         $taskModel->setData($taskModel::fields_RUNTIME, $task_end_time);
                         # 运行完毕将进程ID设置为0
                         $taskModel->setData($taskModel::fields_PID, 0);
-                        $taskModel->save();
                     }
                 }
-                # 设置程序运行数据
-                $taskModel->setData($taskModel::fields_NEXT_RUN_DATE, $cron->getNextRunDate()->format('Y-m-d H:i:s'));
-                $taskModel->setData($taskModel::fields_MAX_NEXT_RUN_DATE, $cron->getNextRunDate('now', 3)->format('Y-m-d H:i:s'));
-                $taskModel->setData($taskModel::fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
-                $taskModel->save(true);
+                # 保存未命执行的任务数据
+                $taskModel->save();
             }
 
             # 循环检查各进程，直到所有子进程结束
