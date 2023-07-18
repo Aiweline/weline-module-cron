@@ -63,7 +63,7 @@ class Run implements CommandInterface
             }
         }
         # 如果给定的任务是单个任务，说明是具体要执行的任务
-        if ($process && count($task_names) == 1) {
+        if (($process||$force) && count($task_names) == 1) {
             /**@var CronTask $task */
             $task = $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, array_shift($task_names))->find()->fetch();
             if (!$task->getId()) {
