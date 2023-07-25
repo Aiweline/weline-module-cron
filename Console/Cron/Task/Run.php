@@ -63,7 +63,7 @@ class Run implements CommandInterface
             }
         }
         # 如果给定的任务是单个任务，说明是具体要执行的任务
-        if (($process||$force) && count($task_names) == 1) {
+        if (($process || $force) && count($task_names) == 1) {
             /**@var CronTask $task */
             $task = $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, array_shift($task_names))->find()->fetch();
             if (!$task->getId()) {
@@ -92,7 +92,7 @@ class Run implements CommandInterface
             }
         }
 
-        $pageSize = 1;
+        $pageSize = 10;
         $this->cronTask->pagination(1, $pageSize)->select()->fetch();
         # 分页读取任务
         $taskTotal = (int)$this->cronTask->pagination['totalSize'];
@@ -104,15 +104,15 @@ class Run implements CommandInterface
             2 => array('pipe', 'w')    // 子进程将向此管道写入stderr
         );
         foreach (range(1, $taskPages) as $current_page) {
-            $offset = ($current_page - 1) * $pageSize;
+            $offset       = ($current_page - 1) * $pageSize;
             $currentTotal = $offset + $pageSize;
             echo PHP_EOL;
-            CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages,$current_page,$taskTotal,$currentTotal]), $currentTotal,
-                                           $taskTotal,false);
+            CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages, $current_page, $taskTotal, $currentTotal]), $currentTotal,
+                $taskTotal, false);
             $tasks = $this->cronTask->limit($pageSize, $offset)
-                                    ->select()
-                                    ->fetch()
-                                    ->getItems();
+                ->select()
+                ->fetch()
+                ->getItems();
             # 进程信息管理
             $processes = [];
             $pipes     = [];
@@ -128,6 +128,19 @@ class Run implements CommandInterface
                 $taskModel->setData($taskModel::fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
                 if ($force || $cron->isDue($task_run_date)) {
                     if ($force || $taskModel->getData($taskModel::fields_STATUS) !== CronStatus::BLOCK->value) {
+                        # 检测程序是否还在运行
+                        if ($pid = $taskModel->getData($taskModel::fields_PID)) {
+                            if (IS_WIN) {
+                                exec('TASKLIST /NH /FO "CSV" /FI "PID eq ' . $pid . '"', $outputA);
+                                $outputB = explode('","', $outputA[0]);
+                                $running = isset($outputB[1]);
+                            } else {
+                                $running = posix_kill($pid, 0);
+                            }
+                            if ($running) {
+                                continue;
+                            }
+                        }
                         # 设置程序运行数据
                         # 上锁
                         $taskModel->setData($taskModel::fields_STATUS, CronStatus::BLOCK->value);
@@ -149,10 +162,10 @@ class Run implements CommandInterface
                             $pid    = $status['pid'];
                             # 记录PID
                             $taskModel->setData($taskModel::fields_PID, $pid)
-                                      ->save();
+                                ->save();
                         } else {
                             $taskModel->setData($taskModel::fields_RUNTIME_ERROR, __('进程创建失败！请检查进程状态！'))
-                                      ->save();
+                                ->save();
                         }
                     } else {
                         # 到了程序下次运行的时间，但是程序仍然处于block阻塞状态，设置程序运行阻塞数据
@@ -195,7 +208,9 @@ class Run implements CommandInterface
             }
 
             # 循环检查各进程，直到所有子进程结束
-            while (array_filter($processes, function ($proc) { return proc_get_status($proc)['running']; })) {
+            while (array_filter($processes, function ($proc) {
+                return proc_get_status($proc)['running'];
+            })) {
                 foreach ($tasks as $i => $task) {
                     # 如果有对应进程,读取所有可读取的输出（缓冲未读输出）
                     if (!empty($pipes[$i])) {
