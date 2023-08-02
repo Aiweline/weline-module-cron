@@ -92,8 +92,9 @@ class Run implements CommandInterface
             }
         }
 
-        $pageSize = 1;
+        $pageSize = 10;
         $this->cronTask->pagination(1, $pageSize)->select()->fetch();
+
         # 分页读取任务
         $taskTotal = (int)$this->cronTask->pagination['totalSize'];
         $taskPages = (int)$this->cronTask->pagination['lastPage'];
@@ -109,6 +110,11 @@ class Run implements CommandInterface
             echo PHP_EOL;
             CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages,$current_page,$taskTotal,$currentTotal]), $currentTotal,
                                            $taskTotal,false);
+            if ($task_names) {
+                foreach ($task_names as $taskName) {
+                    $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $taskName);
+                }
+            }
             $tasks = $this->cronTask->limit($pageSize, $offset)
                                     ->select()
                                     ->fetch()
