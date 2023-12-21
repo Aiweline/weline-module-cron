@@ -262,11 +262,7 @@ class Run implements CommandInterface
 
     public function isProcessRunning(int $pid)
     {
-        if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
-            $output = [];
-            exec("ps -ef | grep $processName | grep -v grep", $output);
-            return count($output) > 0;
-        } else {
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             $output = [];
             exec("tasklist /FI \"PID eq $pid\" 2>NUL", $output);
             foreach ($output as $line) {
@@ -274,14 +270,19 @@ class Run implements CommandInterface
                     return true;
                 }
             }
+        } else {
+            $output = [];
+            exec("ps -p $pid", $output);
+            return count($output) > 1;
         }
         return false;
     }
 
     public function getProcessOutput(int $pid): string|false
     {
+        $output = false;
         if (!$this->isProcessRunning($pid)) {
-            return false;
+            return $output;
         }
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             // Windows 上的实现
@@ -290,9 +291,16 @@ class Run implements CommandInterface
         } else {
             // Linux 上的实现
             if (file_exists("/proc/$pid")) {
-                $output = file_get_contents("/proc/$pid/fd/1");
-            } else {
-                $output = false;
+                $descriptors = [
+                    1 => ['pipe', 'w'],
+                ];
+                $process = proc_open("cat /proc/$pid/fd/1", $descriptors, $pipes);
+                if (is_resource($process)) {
+                    $output = stream_get_contents($pipes[1]);
+                    fclose($pipes[1]);
+                    proc_close($process);
+                    return $output;
+                }
             }
         }
         return $output;
