@@ -63,7 +63,7 @@ class Run implements CommandInterface
             }
         }
         # 如果给定的任务是单个任务，说明是具体要执行的任务
-        if (($process||$force) && count($task_names) == 1) {
+        if (($process || $force) && count($task_names) == 1) {
             /**@var CronTask $task */
             $task = $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, array_shift($task_names))->find()->fetch();
             if (!$task->getId()) {
@@ -92,9 +92,8 @@ class Run implements CommandInterface
             }
         }
 
-        $pageSize = 10;
+        $pageSize = 1;
         $this->cronTask->pagination(1, $pageSize)->select()->fetch();
-
         # 分页读取任务
         $taskTotal = (int)$this->cronTask->pagination['totalSize'];
         $taskPages = (int)$this->cronTask->pagination['lastPage'];
@@ -105,20 +104,15 @@ class Run implements CommandInterface
             2 => array('pipe', 'w')    // 子进程将向此管道写入stderr
         );
         foreach (range(1, $taskPages) as $current_page) {
-            $offset = ($current_page - 1) * $pageSize;
+            $offset       = ($current_page - 1) * $pageSize;
             $currentTotal = $offset + $pageSize;
             echo PHP_EOL;
-            CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages,$current_page,$taskTotal,$currentTotal]), $currentTotal,
-                                           $taskTotal,false);
-            if ($task_names) {
-                foreach ($task_names as $taskName) {
-                    $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $taskName);
-                }
-            }
+            CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages, $current_page, $taskTotal, $currentTotal]), $currentTotal,
+                $taskTotal, false);
             $tasks = $this->cronTask->limit($pageSize, $offset)
-                                    ->select()
-                                    ->fetch()
-                                    ->getItems();
+                ->select()
+                ->fetch()
+                ->getItems();
             # 进程信息管理
             $processes = [];
             $pipes     = [];
@@ -132,6 +126,23 @@ class Run implements CommandInterface
                 $taskModel->setData($taskModel::fields_NEXT_RUN_DATE, $cron->getNextRunDate()->format('Y-m-d H:i:s'));
                 $taskModel->setData($taskModel::fields_MAX_NEXT_RUN_DATE, $cron->getNextRunDate('now', 3)->format('Y-m-d H:i:s'));
                 $taskModel->setData($taskModel::fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
+                $pid = $taskModel->getData($taskModel::fields_PID) ?: 0;
+                if ($pid and $force) {
+                    if ($this->isProcessRunning($pid)) {
+                        $msg = __('%1 程序ID:%2 正在运行中，当前强制执行正在杀死进程中...', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
+                        $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
+                        d($msg);
+                    } else {
+                        $pid = 0;
+                    }
+                    $this->killPid($pid);
+                    if ($this->isProcessRunning($pid)) {
+                        $force = false;
+                        $msg   = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
+                        $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
+                        d($msg);
+                    }
+                }
                 if ($force || $cron->isDue($task_run_date)) {
                     if ($force || $taskModel->getData($taskModel::fields_STATUS) !== CronStatus::BLOCK->value) {
                         # 设置程序运行数据
@@ -155,10 +166,10 @@ class Run implements CommandInterface
                             $pid    = $status['pid'];
                             # 记录PID
                             $taskModel->setData($taskModel::fields_PID, $pid)
-                                      ->save();
+                                ->save();
                         } else {
                             $taskModel->setData($taskModel::fields_RUNTIME_ERROR, __('进程创建失败！请检查进程状态！'))
-                                      ->save();
+                                ->save();
                         }
                     } else {
                         # 到了程序下次运行的时间，但是程序仍然处于block阻塞状态，设置程序运行阻塞数据
@@ -178,12 +189,15 @@ class Run implements CommandInterface
                     $taskModel->setData($taskModel::fields_STATUS, CronStatus::PENDING->value);
                 }
                 # 如果有进程PID，检测是否运行结束
-                if ($pid = $taskModel->getData($taskModel::fields_PID)) {
+                if ($pid !== 0) {
                     $task_end_time = microtime(true) - $task_start_time;
-                    $isRunning     = posix_kill($pid, 0);
+                    $isRunning     = $this->isProcessRunning($pid);
                     if ($isRunning) {
-                        $taskModel->setData($taskModel::fields_BLOCK_TIME, $task_start_time - $run_time);
-                        $taskModel->save();
+                        $output = $this->getProcessOutput($pid);
+                        $taskModel->setData($taskModel::fields_BLOCK_TIME, $task_start_time - $run_time)
+                            ->setData($taskModel::fields_RUNTIME_ERROR, $output)
+                            ->save();
+                        echo $output;
                         continue;
                     } elseif ($taskModel->getData($taskModel::fields_STATUS) !== CronStatus::SUCCESS->value) {
                         $taskModel->setData($taskModel::fields_RUN_TIMES, (int)$taskModel->getData($taskModel::fields_RUN_TIMES) + 1);
@@ -193,43 +207,95 @@ class Run implements CommandInterface
                         $taskModel->setData($taskModel::fields_STATUS, CronStatus::SUCCESS->value);
                         $taskModel->setData($taskModel::fields_RUNTIME, $task_end_time);
                         # 运行完毕将进程ID设置为0
-                        $taskModel->setData($taskModel::fields_PID, 0);
+                        $output = $this->getProcessOutput($pid);
+                        $taskModel->setData($taskModel::fields_PID, 0)
+                            ->setData($taskModel::fields_RUNTIME_ERROR, $output);
+                        echo $output;
                     }
                 }
                 # 保存未命执行的任务数据
                 $taskModel->save();
             }
 
-            # 循环检查各进程，直到所有子进程结束
-            while (array_filter($processes, function ($proc) { return proc_get_status($proc)['running']; })) {
-                foreach ($tasks as $i => $task) {
-                    # 如果有对应进程,读取所有可读取的输出（缓冲未读输出）
-                    if (!empty($pipes[$i])) {
-                        $str = fread($pipes[$i][1], 1024);
-                        if ($str) {
-                            echo $str;
-                        }
-                    }
-                }
-            }
-            # 关闭所有管道和进程
-            foreach ($tasks as $i => $task) {
-                if (!empty($pipes[$i])) {
-                    fclose($pipes[$i][1]);
-                    proc_close($processes[$i]);
-                    $task->setData($task::fields_RUN_TIMES, (int)$task->getData($task::fields_RUN_TIMES) + 1);
-                    # 设置程序运行数据
-                    $task->setData($task::fields_BLOCK_TIME, 0);
-                    # 解锁
-                    $task->setData($task::fields_STATUS, CronStatus::SUCCESS->value);
-                    $task_end_time = microtime(true) - $task_start_time;
-                    $task->setData($task::fields_RUNTIME, $task_end_time);
-                    # 运行完毕将进程ID设置为0
-                    $task->setData($task::fields_PID, 0);
-                    $task->save();
+//            # 循环检查各进程，直到所有子进程结束
+//            while (array_filter($processes, function ($proc) { return proc_get_status($proc)['running']; })) {
+//                foreach ($tasks as $i => $task) {
+//                    # 如果有对应进程,读取所有可读取的输出（缓冲未读输出）
+//                    if (!empty($pipes[$i])) {
+//                        $str = fread($pipes[$i][1], 1024);
+//                        if ($str) {
+//                            echo $str;
+//                        }
+//                    }
+//                }
+//            }
+//            # 关闭所有管道和进程
+//            foreach ($tasks as $i => $task) {
+//                if (!empty($pipes[$i])) {
+//                    fclose($pipes[$i][1]);
+//                    proc_close($processes[$i]);
+//                    $task->setData($task::fields_RUN_TIMES, (int)$task->getData($task::fields_RUN_TIMES) + 1);
+//                    # 设置程序运行数据
+//                    $task->setData($task::fields_BLOCK_TIME, 0);
+//                    # 解锁
+//                    $task->setData($task::fields_STATUS, CronStatus::SUCCESS->value);
+//                    $task_end_time = microtime(true) - $task_start_time;
+//                    $task->setData($task::fields_RUNTIME, $task_end_time);
+//                    # 运行完毕将进程ID设置为0
+//                    $task->setData($task::fields_PID, 0);
+//                    $task->save();
+//                }
+//            }
+        }
+    }
+
+    public function killPid(int $pid)
+    {
+        if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
+            exec("kill $pid 2>/dev/null", $output, $exitCode);
+            return $exitCode === 0;
+        } else {
+            exec("taskkill /F /PID $pid 2>NUL", $output, $exitCode);
+            return $exitCode === 0;
+        }
+    }
+
+    public function isProcessRunning(int $pid)
+    {
+        if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
+            $output = [];
+            exec("ps -ef | grep $processName | grep -v grep", $output);
+            return count($output) > 0;
+        } else {
+            $output = [];
+            exec("tasklist /FI \"PID eq $pid\" 2>NUL", $output);
+            foreach ($output as $line) {
+                if (strpos($line, " $pid ") !== false) {
+                    return true;
                 }
             }
         }
+        return false;
+    }
+
+    public function getProcessOutput(int $pid): string|false
+    {
+        if (!$this->isProcessRunning($pid)) {
+            return false;
+        }
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            // Windows 上的实现
+            $command = "wmic process get ProcessId,CommandLine | findstr $pid";
+            $output  = shell_exec($command);
+        } else {
+            // Linux 上的实现
+            if (file_exists("/proc/$pid")) {
+                $output = file_get_contents("/proc/$pid/fd/1");
+            } else {
+                $output = false;
+            }
+        }
+        return $output;
     }
 
     /**
