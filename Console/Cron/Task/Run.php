@@ -17,6 +17,7 @@ use Aiweline\KteInventory\Model\SiteCronTask;
 use Cron\CronExpression;
 use Weline\Cron\CronTaskInterface;
 use Weline\Cron\Helper\CronStatus;
+use Weline\Cron\Helper\Process;
 use Weline\Cron\Model\CronTask;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
@@ -128,15 +129,15 @@ class Run implements CommandInterface
                 $taskModel->setData($taskModel::fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
                 $pid = $taskModel->getData($taskModel::fields_PID) ?: 0;
                 if ($pid and $force) {
-                    if ($this->isProcessRunning($pid)) {
+                    if (Process::isProcessRunning($pid)) {
                         $msg = __('%1 程序ID:%2 正在运行中，当前强制执行正在杀死进程中...', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
                         $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
                         d($msg);
                     } else {
                         $pid = 0;
                     }
-                    $this->killPid($pid);
-                    if ($this->isProcessRunning($pid)) {
+                    Process::killPid($pid);
+                    if (Process::isProcessRunning($pid)) {
                         $force = false;
                         $msg   = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
                         $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
@@ -191,9 +192,9 @@ class Run implements CommandInterface
                 # 如果有进程PID，检测是否运行结束
                 if ($pid !== 0) {
                     $task_end_time = microtime(true) - $task_start_time;
-                    $isRunning     = $this->isProcessRunning($pid);
+                    $isRunning     = Process::isProcessRunning($pid);
                     if ($isRunning) {
-                        $output = $this->getProcessOutput($pid);
+                        $output = Process::getProcessOutput($pid);
                         $taskModel->setData($taskModel::fields_BLOCK_TIME, $task_start_time - $run_time)
                             ->setData($taskModel::fields_RUNTIME_ERROR, $output)
                             ->save();
@@ -207,7 +208,7 @@ class Run implements CommandInterface
                         $taskModel->setData($taskModel::fields_STATUS, CronStatus::SUCCESS->value);
                         $taskModel->setData($taskModel::fields_RUNTIME, $task_end_time);
                         # 运行完毕将进程ID设置为0
-                        $output = $this->getProcessOutput($pid);
+                        $output = Process::getProcessOutput($pid);
                         $taskModel->setData($taskModel::fields_PID, 0)
                             ->setData($taskModel::fields_RUNTIME_ERROR, $output);
                         echo $output;
@@ -247,63 +248,6 @@ class Run implements CommandInterface
 //                }
 //            }
         }
-    }
-
-    public function killPid(int $pid)
-    {
-        if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
-            exec("kill $pid 2>/dev/null", $output, $exitCode);
-            return $exitCode === 0;
-        } else {
-            exec("taskkill /F /PID $pid 2>NUL", $output, $exitCode);
-            return $exitCode === 0;
-        }
-    }
-
-    public function isProcessRunning(int $pid)
-    {
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            $output = [];
-            exec("tasklist /FI \"PID eq $pid\" 2>NUL", $output);
-            foreach ($output as $line) {
-                if (strpos($line, " $pid ") !== false) {
-                    return true;
-                }
-            }
-        } else {
-            $output = [];
-            exec("ps -p $pid", $output);
-            return count($output) > 1;
-        }
-        return false;
-    }
-
-    public function getProcessOutput(int $pid): string|false
-    {
-        $output = false;
-        if (!$this->isProcessRunning($pid)) {
-            return $output;
-        }
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            // Windows 上的实现
-            $command = "wmic process get ProcessId,CommandLine | findstr $pid";
-            $output  = shell_exec($command);
-        } else {
-            // Linux 上的实现
-            if (file_exists("/proc/$pid")) {
-                $descriptors = [
-                    1 => ['pipe', 'w'],
-                ];
-                $process = proc_open("cat /proc/$pid/fd/1", $descriptors, $pipes);
-                if (is_resource($process)) {
-                    $output = stream_get_contents($pipes[1]);
-                    fclose($pipes[1]);
-                    proc_close($process);
-                    return $output;
-                }
-            }
-        }
-        return $output;
     }
 
     /**
