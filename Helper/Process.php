@@ -47,7 +47,7 @@ class Process
     static public function getProcessOutput(int $pid): string|false
     {
         $output = false;
-        if (!$this->isProcessRunning($pid)) {
+        if (!self::isProcessRunning($pid)) {
             return $output;
         }
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
