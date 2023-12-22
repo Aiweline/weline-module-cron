@@ -128,20 +128,42 @@ class Run implements CommandInterface
                 $taskModel->setData($taskModel::fields_MAX_NEXT_RUN_DATE, $cron->getNextRunDate('now', 3)->format('Y-m-d H:i:s'));
                 $taskModel->setData($taskModel::fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
                 $pid = $taskModel->getData($taskModel::fields_PID) ?: 0;
-                if ($pid and $force) {
-                    if (Process::isProcessRunning($pid)) {
-                        $msg = __('%1 程序ID:%2 正在运行中，当前强制执行正在杀死进程中...', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
-                        $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
-                        d($msg);
-                    } else {
+                if ($pid) {
+                    if(Process::isProcessRunning($pid)){
+                        # 如果超时
+                        if($force){
+                            $msg = __('%1 程序ID:%2 正在运行中，当前强制执行正在杀死进程中...', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
+                            $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
+                            d($msg);
+                            Process::killPid($pid);
+                            if (Process::isProcessRunning($pid)) {
+                                $force = false;
+                                $msg   = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
+                                $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
+                                d($msg);
+                            }
+                        }else{
+                            $msg = __('%1 程序ID:%2 正在运行中，若要强制执行，请手动杀死进程后重试!或者使用配置项’-f‘的强制执行', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
+                            $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
+                            d($msg);
+                            continue;
+                        }
+                    }else{
+                        $msg = __('%1 程序ID:%2 已运行完毕!', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
                         $pid = 0;
-                    }
-                    Process::killPid($pid);
-                    if (Process::isProcessRunning($pid)) {
-                        $force = false;
-                        $msg   = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
-                        $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
+                        $taskModel->setData($taskModel::fields_RUN_TIMES, (int)$taskModel->getData($taskModel::fields_RUN_TIMES) + 1);
+                        # 设置程序运行数据
+                        $taskModel->setData($taskModel::fields_BLOCK_TIME, 0);
+                        # 解锁
+                        $taskModel->setData($taskModel::fields_STATUS, CronStatus::SUCCESS->value);
+                        $taskModel->setData($taskModel::fields_RUNTIME,  microtime(true) - $task_start_time);
+                        # 运行完毕将进程ID设置为0
+                        $output = Process::getProcessOutput($pid);
+                        $taskModel->setData($taskModel::fields_PID, 0)
+                            ->setData($taskModel::fields_RUNTIME_ERROR, $output)
+                        ->save();
                         d($msg);
+                        continue;
                     }
                 }
                 if ($force || $cron->isDue($task_run_date)) {
