@@ -30,7 +30,7 @@ class Process
     {
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             $output = [];
-            exec("tasklist /FI \"PID eq $pid\" 2>NUL", $output);
+            exec("tasklist /FI \"PID eq $pid\" 2>NUL", $output, $exitCode);
             foreach ($output as $line) {
                 if (strpos($line, " $pid ") !== false) {
                     return true;
@@ -38,7 +38,11 @@ class Process
             }
         } else {
             $output = [];
-            exec("ps -p $pid", $output);
+            try {
+                exec("ps -p $pid", $output, $exitCode);
+            } catch (\Throwable $e) {
+                return false;
+            }
             return count($output) > 1;
         }
         return false;
