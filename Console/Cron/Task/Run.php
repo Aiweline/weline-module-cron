@@ -92,9 +92,14 @@ class Run implements CommandInterface
                 $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $taskName);
             }
         }
-
         $pageSize = 1;
         $this->cronTask->pagination(1, $pageSize)->select()->fetch();
+        # 读取给定的任务
+        if ($task_names) {
+            foreach ($task_names as $taskName) {
+                $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $taskName);
+            }
+        }
         # 分页读取任务
         $taskTotal = (int)$this->cronTask->pagination['totalSize'];
         $taskPages = (int)$this->cronTask->pagination['lastPage'];
@@ -118,6 +123,7 @@ class Run implements CommandInterface
             $processes = [];
             $pipes     = [];
             foreach ($tasks as $key => $taskModel) {
+                $execute_name    = $taskModel->getData($taskModel::fields_EXECUTE_NAME);
                 $task_start_time = microtime(true);
                 $task_run_date   = date('Y-m-d H:i:s');
                 $run_time        = $taskModel->getData($taskModel::fields_RUN_TIME) ?? 0;
@@ -129,43 +135,50 @@ class Run implements CommandInterface
                 $taskModel->setData($taskModel::fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
                 $pid = $taskModel->getData($taskModel::fields_PID) ?: 0;
                 if ($pid) {
-                    if(Process::isProcessRunning($pid)){
+                    if (Process::isProcessRunning($pid)) {
                         # 如果超时
-                        if($force){
-                            $msg = __('%1 程序ID:%2 正在运行中，当前强制执行正在杀死进程中...', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
-                            $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
+                        if ($force) {
+                            $msg    = __('%1 程序ID:%2 正在运行中，当前强制执行正在杀死进程中...', [$execute_name, $pid]);
+                            $output = Process::getProcessOutput($execute_name);
+                            Process::unsetLogProcessFilePath($execute_name);
+                            $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)
+                                ->setData($taskModel::fields_RUNTIME_ERROR, $output)
+                                ->save();
                             d($msg);
                             Process::killPid($pid);
                             if (Process::isProcessRunning($pid)) {
                                 $force = false;
-                                $msg   = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
+                                $msg   = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$execute_name, $pid]);
                                 $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
                                 d($msg);
                             }
-                        }else{
-                            $msg = __('%1 程序ID:%2 正在运行中，若要强制执行，请手动杀死进程后重试!或者使用配置项’-f‘的强制执行', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
+                        } else {
+                            $msg = __('%1 程序ID:%2 正在运行中，若要强制执行，请手动杀死进程后重试!或者使用配置项’-f‘的强制执行', [$execute_name, $pid]);
                             $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
                             d($msg);
                             continue;
                         }
-                    }else{
-                        $msg = __('%1 程序ID:%2 已运行完毕!', [$taskModel->getData($taskModel::fields_EXECUTE_NAME), $pid]);
+                    } else {
+                        $msg = __('%1 程序ID:%2 已运行完毕!', [$execute_name, $pid]);
                         $pid = 0;
                         $taskModel->setData($taskModel::fields_RUN_TIMES, (int)$taskModel->getData($taskModel::fields_RUN_TIMES) + 1);
                         # 设置程序运行数据
                         $taskModel->setData($taskModel::fields_BLOCK_TIME, 0);
+                        $output = Process::getProcessOutput($execute_name);
+                        Process::unsetLogProcessFilePath($execute_name);
+                        $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $output);
                         # 解锁
                         $taskModel->setData($taskModel::fields_STATUS, CronStatus::SUCCESS->value);
-                        $taskModel->setData($taskModel::fields_RUNTIME,  microtime(true) - $task_start_time);
+                        $taskModel->setData($taskModel::fields_RUNTIME, microtime(true) - $task_start_time);
                         # 运行完毕将进程ID设置为0
-                        $output = Process::getProcessOutput($pid);
                         $taskModel->setData($taskModel::fields_PID, 0)
                             ->setData($taskModel::fields_RUNTIME_ERROR, $output)
-                        ->save();
+                            ->save();
                         d($msg);
                         continue;
                     }
                 }
+                d($taskModel->getData($taskModel::fields_NAME) . ' ' . $execute_name);
                 if ($force || $cron->isDue($task_run_date)) {
                     if ($force || $taskModel->getData($taskModel::fields_STATUS) !== CronStatus::BLOCK->value) {
                         # 设置程序运行数据
@@ -177,19 +190,24 @@ class Run implements CommandInterface
                         /**@var \Weline\Cron\CronTaskInterface $task */
                         $task = ObjectManager::getInstance($taskModel->getData('class'));
                         # 创建异步程序
-                        $command = 'cd ' . BP . ' && ' . PHP_BINARY . ' bin/m cron:task:run -process ' . $task->execute_name() . ($force ? ' -force' : '');
-                        $process = proc_open($command, $descriptorspec, $procPipes);
+                        $process_log_path = Process::getLogProcessFilePath($task->execute_name());
+                        $command_fix      = !IS_WIN ? ' 2>&1 & echo $!' : '';
+                        $command          = 'cd ' . BP . ' && nohup ' . PHP_BINARY . ' bin/m cron:task:run -process ' . $task->execute_name() . ($force ? ' -force' : '') . ' > ' . $process_log_path . $command_fix;
+                        $process          = proc_open($command, $descriptorspec, $procPipes);
                         # 进程保存到进程数组
                         $processes[$key] = $process;
                         # 设置进程非阻塞
                         stream_set_blocking($procPipes[1], false);
                         $pipes[$key] = $procPipes;
                         if (is_resource($process)) {
-                            $status = proc_get_status($process);
-                            $pid    = $status['pid'];
+                            $pid = proc_get_status($process)['pid'] + 2;
                             # 记录PID
                             $taskModel->setData($taskModel::fields_PID, $pid)
                                 ->save();
+                            // 关闭文件指针
+                            fclose($procPipes[0]);
+                            fclose($procPipes[1]);
+                            fclose($procPipes[2]);
                         } else {
                             $taskModel->setData($taskModel::fields_RUNTIME_ERROR, __('进程创建失败！请检查进程状态！'))
                                 ->save();
@@ -216,7 +234,7 @@ class Run implements CommandInterface
                     $task_end_time = microtime(true) - $task_start_time;
                     $isRunning     = Process::isProcessRunning($pid);
                     if ($isRunning) {
-                        $output = Process::getProcessOutput($pid);
+                        $output = Process::getProcessOutput($execute_name);
                         $taskModel->setData($taskModel::fields_BLOCK_TIME, $task_start_time - $run_time)
                             ->setData($taskModel::fields_RUNTIME_ERROR, $output)
                             ->save();
@@ -230,7 +248,7 @@ class Run implements CommandInterface
                         $taskModel->setData($taskModel::fields_STATUS, CronStatus::SUCCESS->value);
                         $taskModel->setData($taskModel::fields_RUNTIME, $task_end_time);
                         # 运行完毕将进程ID设置为0
-                        $output = Process::getProcessOutput($pid);
+                        $output = Process::getProcessOutput($execute_name);
                         $taskModel->setData($taskModel::fields_PID, 0)
                             ->setData($taskModel::fields_RUNTIME_ERROR, $output);
                         echo $output;
