@@ -174,11 +174,10 @@ class Run implements CommandInterface
                         $taskModel->setData($taskModel::fields_PID, 0)
                             ->setData($taskModel::fields_RUNTIME_ERROR, $output)
                             ->save();
-                        d($msg);
                         continue;
                     }
                 }
-                d($taskModel->getData($taskModel::fields_NAME) . ' ' . $execute_name);
+//                d($taskModel->getData($taskModel::fields_NAME) . ' ' . $execute_name);
                 if ($force || $cron->isDue($task_run_date)) {
                     if ($force || $taskModel->getData($taskModel::fields_STATUS) !== CronStatus::BLOCK->value) {
                         # 设置程序运行数据
