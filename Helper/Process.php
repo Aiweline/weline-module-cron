@@ -12,11 +12,33 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Helper;
 
+use Weline\Framework\App\Env;
+
 class Process
 {
-
-    static public function killPid(int $pid)
+    static public function getLogProcessFilePath(string $pname)
     {
+        $path = Env::path_framework_generated . 'cron' . DS . $pname . '.log';
+        if(!is_file($path)){
+            if(!is_dir(dirname($path))){
+                mkdir(dirname($path), 0777, true);
+            }
+            touch($path);
+        }
+        return $path;
+    }
+    static public function unsetLogProcessFilePath(string $pname)
+    {
+        $path = self::getLogProcessFilePath($pname);
+        if(is_file($path)){
+            unlink($path);
+        }
+        return true;
+    }
+
+    static public function killPid(int $pid,string $pname)
+    {
+        unlink(self::getLogProcessFilePath($pname));
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
             exec("kill $pid 2>/dev/null", $output, $exitCode);
             return $exitCode === 0;
@@ -38,41 +60,15 @@ class Process
             }
         } else {
             $output = [];
-            try {
-                exec("ps -p $pid", $output, $exitCode);
-            } catch (\Throwable $e) {
-                return false;
-            }
+            exec("ps -p $pid", $output);
             return count($output) > 1;
         }
         return false;
     }
 
-    static public function getProcessOutput(int $pid): string|false
+    static public function getProcessOutput(string $pname): string|false
     {
-        $output = false;
-        if (!self::isProcessRunning($pid)) {
-            return $output;
-        }
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            // Windows 上的实现
-            $command = "wmic process get ProcessId,CommandLine | findstr $pid";
-            $output  = shell_exec($command);
-        } else {
-            // Linux 上的实现
-            if (file_exists("/proc/$pid")) {
-                $descriptors = [
-                    1 => ['pipe', 'w'],
-                ];
-                $process = proc_open("cat /proc/$pid/fd/1", $descriptors, $pipes);
-                if (is_resource($process)) {
-                    $output = stream_get_contents($pipes[1]);
-                    fclose($pipes[1]);
-                    proc_close($process);
-                    return $output;
-                }
-            }
-        }
-        return $output;
+        $path = self::getLogProcessFilePath($pname);
+        return file_get_contents($path);
     }
 }
