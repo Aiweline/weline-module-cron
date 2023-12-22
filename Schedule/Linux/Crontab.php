@@ -31,7 +31,7 @@ $php_binary bin/m cron:task:run
         file_put_contents($cron_shell_file_path, $shell_string);
         if (is_string($name) && !empty($name) && $this->exist($name) === false) {
             exec(
-                'echo -e "`crontab -l` ' . PHP_EOL . ' */1 * * * * sh ' . $cron_shell_file_path . '" | crontab -',
+                'echo -e "`crontab -l` ' . PHP_EOL . ' * * * * * sleep 5 && sh ' . $cron_shell_file_path . '" | crontab -',
                 $output
             );
             return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $output];
