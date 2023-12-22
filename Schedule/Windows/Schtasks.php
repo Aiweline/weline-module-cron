@@ -43,7 +43,7 @@ $base_project_disk_name && cd $base_project_dir && $php_binary bin/m cron:task:r
 ";
             $bat_file   = Env::path_framework_generated . $name . '-cron.bat';
             file_put_contents($bat_file, $bat_string);
-            $create_command = "SCHTASKS /Create /TN $name /TR $bat_file /SC SECOND /MO 5";
+            $create_command = "SCHTASKS /Create /TN $name /TR $bat_file /SC MINUTE";
             $data           = $this->system->win_exec($create_command);
             return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $data];
         }
