@@ -16,6 +16,16 @@ use Weline\Framework\App\Env;
 
 class Process
 {
+    static public function getPPid(int $pid){
+        if(IS_WIN){
+            $command = "wmic process where processid=$pid get parentprocessid";
+            $ppid = exec($command);
+        }else{
+            $command = "ps -p $pid -o ppid=";
+            $ppid = exec($command);
+        }
+        return $ppid;
+    }
     static public function getLogProcessFilePath(string $pname)
     {
         $path = Env::path_framework_generated . 'cron' . DS . $pname . '.log';
