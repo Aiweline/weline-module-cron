@@ -199,7 +199,7 @@ class Run implements CommandInterface
                         stream_set_blocking($procPipes[1], false);
                         $pipes[$key] = $procPipes;
                         if (is_resource($process)) {
-                            $pid = proc_get_status($process)['pid'] + 2;
+                            $pid = proc_get_status($process)['pid'];
                             # 记录PID
                             $taskModel->setData($taskModel::fields_PID, $pid)
                                 ->save();
