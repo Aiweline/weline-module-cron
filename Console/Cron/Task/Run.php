@@ -250,6 +250,7 @@ class Run implements CommandInterface
                         $output = Process::getProcessOutput($execute_name);
                         $taskModel->setData($taskModel::fields_PID, 0)
                             ->setData($taskModel::fields_RUNTIME_ERROR, $output);
+                        Process::unsetLogProcessFilePath($taskModel->getData($taskModel::fields_EXECUTE_NAME));
                         echo $output;
                     }
                 }
