@@ -191,9 +191,16 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                 <td>{{task.next_run_date}}</td>
                                                 <td>{{task.pre_run_date}}</td>
                                                 <td>{{task.run_times}}</td>
-                                                <td>{{task.tip}}</td>
+                                                <td><span title="{{task.tip}}"><string>task.tip|20</string></span></td>
                                                 <td style="color: @if{task.runtime_error=>'red'}">
-                                                    <lang>{{task.runtime_error}} <if condition="task.out_time"><lang>任务停止</lang>{{task.out_time}}<lang>小时</lang></if></lang>
+                                                   <span title="{{task.runtime_error}}">
+                                                       <string>task.runtime_error|50</string>
+                                                   </span>
+                                                    <if condition="task.out_time">
+                                                        <lang>任务停止</lang>
+                                                            {{task.out_time}}
+                                                        <lang>小时</lang>
+                                                    </if>
                                                 </td>
                                                 <td style="color: @if{task.runtime_error_date=>'red'}">{{task.runtime_error_date}}</td>
                                                 <td>{{task.create_time}}</td>
