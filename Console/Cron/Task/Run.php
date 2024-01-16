@@ -164,7 +164,7 @@ class Run implements CommandInterface
                         $taskModel->setData($taskModel::fields_RUN_TIMES, (int)$taskModel->getData($taskModel::fields_RUN_TIMES) + 1);
                         # 设置程序运行数据
                         $taskModel->setData($taskModel::fields_BLOCK_TIME, 0);
-                        $output = Process::getProcessOutput($execute_name);
+                        $output = $msg . PHP_EOL . Process::getProcessOutput($execute_name);
                         Process::unsetLogProcessFilePath($execute_name);
                         $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $output);
                         # 解锁
@@ -172,7 +172,6 @@ class Run implements CommandInterface
                         $taskModel->setData($taskModel::fields_RUNTIME, microtime(true) - $task_start_time);
                         # 运行完毕将进程ID设置为0
                         $taskModel->setData($taskModel::fields_PID, 0)
-                            ->setData($taskModel::fields_RUNTIME_ERROR, $output)
                             ->save();
                         continue;
                     }
@@ -250,7 +249,6 @@ class Run implements CommandInterface
                         $output = Process::getProcessOutput($execute_name);
                         $taskModel->setData($taskModel::fields_PID, 0)
                             ->setData($taskModel::fields_RUNTIME_ERROR, $output);
-                        Process::unsetLogProcessFilePath($taskModel->getData($taskModel::fields_EXECUTE_NAME));
                         echo $output;
                     }
                 }
