@@ -130,6 +130,8 @@ class Run implements CommandInterface
                 # 上锁
                 $cron = CronExpression::factory($taskModel->getData('cron_time'));
                 # 设置程序预计数据
+                $taskModel->setData($taskModel::fields_BLOCK_TIME, 0);
+                $taskModel->setData($taskModel::fields_RUNTIME_ERROR, '');
                 $taskModel->setData($taskModel::fields_NEXT_RUN_DATE, $cron->getNextRunDate()->format('Y-m-d H:i:s'));
                 $taskModel->setData($taskModel::fields_MAX_NEXT_RUN_DATE, $cron->getNextRunDate('now', 3)->format('Y-m-d H:i:s'));
                 $taskModel->setData($taskModel::fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
