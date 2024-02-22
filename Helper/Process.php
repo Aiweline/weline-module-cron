@@ -28,7 +28,7 @@ class Process
     }
     static public function getLogProcessFilePath(string $pname)
     {
-        $path = Env::path_framework_generated . 'cron' . DS . $pname . '.log';
+        $path = Env::VAR_DIR . 'cron' . DS . $pname . '.log';
         if(!is_file($path)){
             if(!is_dir(dirname($path))){
                 mkdir(dirname($path), 0777, true);
