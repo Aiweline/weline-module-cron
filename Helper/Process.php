@@ -48,12 +48,14 @@ class Process
 
     static public function killPid(int $pid,string $pname)
     {
-        unlink(self::getLogProcessFilePath($pname));
+        $logfile = self::getLogProcessFilePath($pname);
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
             exec("kill $pid 2>/dev/null", $output, $exitCode);
+            file_put_contents($logfile, json_encode($output));
             return $exitCode === 0;
         } else {
             exec("taskkill /F /PID $pid 2>NUL", $output, $exitCode);
+            file_put_contents($logfile, json_encode($output));
             return $exitCode === 0;
         }
     }
