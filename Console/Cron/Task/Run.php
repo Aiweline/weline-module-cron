@@ -112,7 +112,6 @@ class Run implements CommandInterface
         foreach (range(1, $taskPages) as $current_page) {
             $offset       = ($current_page - 1) * $pageSize;
             $currentTotal = $offset + $pageSize;
-            echo PHP_EOL;
             CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages, $current_page, $taskTotal, $currentTotal]), $currentTotal,
                 $taskTotal, false);
             $tasks = $this->cronTask->limit($pageSize, $offset)
@@ -193,7 +192,9 @@ class Run implements CommandInterface
                         $process_log_path = Process::getLogProcessFilePath($task->execute_name());
                         $command_fix      = !IS_WIN ? ' 2>&1 & echo $!' : '';
                         $command          = 'cd ' . BP . ' && nohup ' . PHP_BINARY . ' bin/m cron:task:run -process ' . $task->execute_name() . ($force ? ' -force' : '') . ' > ' . $process_log_path . $command_fix;
+                        Process::setProcessOutput($task->execute_name(), $command . PHP_EOL);
                         $process          = proc_open($command, $descriptorspec, $procPipes);
+                        Process::setProcessOutput($queue_name, json_encode($process) . PHP_EOL);
                         # 进程保存到进程数组
                         $processes[$key] = $process;
                         # 设置进程非阻塞
