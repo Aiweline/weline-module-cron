@@ -194,7 +194,7 @@ class Run implements CommandInterface
                         $command          = 'cd ' . BP . ' && nohup ' . PHP_BINARY . ' bin/m cron:task:run -process ' . $task->execute_name() . ($force ? ' -force' : '') . ' > ' . $process_log_path . $command_fix;
                         Process::setProcessOutput($task->execute_name(), $command . PHP_EOL);
                         $process          = proc_open($command, $descriptorspec, $procPipes);
-                        Process::setProcessOutput($queue_name, json_encode($process) . PHP_EOL);
+                        Process::setProcessOutput($task->execute_name(), json_encode($process) . PHP_EOL);
                         # 进程保存到进程数组
                         $processes[$key] = $process;
                         # 设置进程非阻塞
