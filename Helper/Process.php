@@ -92,4 +92,15 @@ class Process
         $path = self::getLogProcessFilePath($pname);
         return file_put_contents($path, $content, FILE_APPEND);
     }
+
+    static public function getPidByName(string $pname):int
+    {
+        # 分系统环境
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            $command = "wmic process where name=\"$pname\" get processid";
+            return (int)exec($command);
+        }else{
+            return (int)exec('ps aux | egrep "' . $pname . '" | grep -v grep | tail -n 1 | awk \'{print $2}\'');
+        }
+    }
 }
