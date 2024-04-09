@@ -145,8 +145,8 @@ class Run implements CommandInterface
                             $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)
                                 ->setData($taskModel::fields_RUNTIME_ERROR, $output)
                                 ->save();
-                            d($msg);
-                            Process::killPid($pid);
+                            d($msg . ' 进程ID:' . $pid);
+                            Process::killPid($pid, $execute_name);
                             if (Process::isProcessRunning($pid)) {
                                 $force = false;
                                 $msg   = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$execute_name, $pid]);
@@ -191,10 +191,10 @@ class Run implements CommandInterface
                         # 创建异步程序
                         $process_log_path = Process::getLogProcessFilePath($task->execute_name());
                         $command_fix      = !IS_WIN ? ' 2>&1 & echo $!' : '';
-                        $process_name     =  PHP_BINARY . ' bin/m cron:task:run -process ' . $task->execute_name() . ($force ? ' -force' : '');
+                        $process_name     = PHP_BINARY . ' bin/m cron:task:run -process ' . $task->execute_name() . ($force ? ' -force' : '');
                         $command          = 'cd ' . BP . ' && nohup ' . $process_name . ' > ' . $process_log_path . $command_fix;
                         Process::setProcessOutput($task->execute_name(), $command . PHP_EOL);
-                        $process          = proc_open($command, $descriptorspec, $procPipes);
+                        $process = proc_open($command, $descriptorspec, $procPipes);
                         Process::setProcessOutput($task->execute_name(), json_encode($process) . PHP_EOL);
                         # 进程保存到进程数组
                         $processes[$key] = $process;
@@ -203,11 +203,11 @@ class Run implements CommandInterface
                         $pipes[$key] = $procPipes;
                         if (is_resource($process)) {
                             $pid = Process::getPidByName($process_name);
-                            if(!$pid){
-                                $queue->setResult(__('进程创建失败！请检查进程状态！'))
-                                    ->setStatus($queue::status_error)
+                            if (!$pid) {
+                                $taskModel->setData($taskModel::fields_RUNTIME_ERROR, __('进程创建失败！请检查进程状态！'))
+                                    ->setData($taskModel::fields_STATUS, CronStatus::FAIL->value)
                                     ->save();
-                            }else{
+                            } else {
                                 # 记录PID
                                 $taskModel->setData($taskModel::fields_PID, $pid)
                                     ->save();
