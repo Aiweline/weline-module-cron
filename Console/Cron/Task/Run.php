@@ -68,7 +68,7 @@ class Run implements CommandInterface
             /**@var CronTask $task */
             $task = $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, array_shift($task_names))->find()->fetch();
             if (!$task->getId()) {
-                ObjectManager::getInstance(Printing::class)->error(__('请指执行的任务不存在！'));
+                ObjectManager::getInstance(Printing::class)->error(__('指执行的任务不存在！'));
                 exit;
             }
             $class = $task->getData(CronTask::fields_CLASS);
@@ -103,16 +103,21 @@ class Run implements CommandInterface
         # 分页读取任务
         $taskTotal = (int)$this->cronTask->pagination['totalSize'];
         $taskPages = (int)$this->cronTask->pagination['lastPage'];
+        if ($taskPages == 0) {
+            ObjectManager::getInstance(Printing::class)->error(__('没有要执行的任务：%1', implode(' ', $task_names)));
+            exit;
+        }
+
         /**@var CronTask $taskModel */
         $descriptorspec = array(
             0 => array('pipe', 'r'),   // 子进程将从此管道读取stdin
             1 => array('pipe', 'w'),   // 子进程将向此管道写入stdout
             2 => array('pipe', 'w')    // 子进程将向此管道写入stderr
         );
-        foreach (range(1, $taskPages) as $current_page) {
-            $offset       = ($current_page - 1) * $pageSize;
+        for ($taskPage = 1; $taskPage <= $taskPages; $taskPage++) {
+            $offset       = ($taskPage - 1) * $pageSize;
             $currentTotal = $offset + $pageSize;
-            CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages, $current_page, $taskTotal, $currentTotal]), $currentTotal,
+            CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages, $current_page, $taskTotal, $taskPage]), $currentTotal,
                 $taskTotal, false);
             $tasks = $this->cronTask->limit($pageSize, $offset)
                 ->select()
@@ -265,37 +270,8 @@ class Run implements CommandInterface
                 # 保存未命执行的任务数据
                 $taskModel->save();
             }
-
-//            # 循环检查各进程，直到所有子进程结束
-//            while (array_filter($processes, function ($proc) { return proc_get_status($proc)['running']; })) {
-//                foreach ($tasks as $i => $task) {
-//                    # 如果有对应进程,读取所有可读取的输出（缓冲未读输出）
-//                    if (!empty($pipes[$i])) {
-//                        $str = fread($pipes[$i][1], 1024);
-//                        if ($str) {
-//                            echo $str;
-//                        }
-//                    }
-//                }
-//            }
-//            # 关闭所有管道和进程
-//            foreach ($tasks as $i => $task) {
-//                if (!empty($pipes[$i])) {
-//                    fclose($pipes[$i][1]);
-//                    proc_close($processes[$i]);
-//                    $task->setData($task::fields_RUN_TIMES, (int)$task->getData($task::fields_RUN_TIMES) + 1);
-//                    # 设置程序运行数据
-//                    $task->setData($task::fields_BLOCK_TIME, 0);
-//                    # 解锁
-//                    $task->setData($task::fields_STATUS, CronStatus::SUCCESS->value);
-//                    $task_end_time = microtime(true) - $task_start_time;
-//                    $task->setData($task::fields_RUNTIME, $task_end_time);
-//                    # 运行完毕将进程ID设置为0
-//                    $task->setData($task::fields_PID, 0);
-//                    $task->save();
-//                }
-//            }
         }
+
     }
 
     /**
