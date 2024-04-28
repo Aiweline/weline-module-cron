@@ -117,7 +117,7 @@ class Run implements CommandInterface
         for ($taskPage = 1; $taskPage <= $taskPages; $taskPage++) {
             $offset       = ($taskPage - 1) * $pageSize;
             $currentTotal = $offset + $pageSize;
-            CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages, $current_page, $taskTotal, $taskPage]), $currentTotal,
+            CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages, $taskPage, $taskTotal, $taskPage]), $currentTotal,
                 $taskTotal, false);
             $tasks = $this->cronTask->limit($pageSize, $offset)
                 ->select()
