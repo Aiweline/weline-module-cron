@@ -198,7 +198,7 @@ class Run implements CommandInterface
                         $process_log_path = Process::getLogProcessFilePath($task->execute_name());
                         $command_fix      = !IS_WIN ? ' 2>&1 & echo $!' : '';
                         $process_name     = PHP_BINARY . ' bin/m cron:task:run -process ' . $task->execute_name() . ($force ? ' -force' : '');
-                        $command          = 'cd ' . BP . ' && nohup ' . $process_name . ' > ' . $process_log_path . $command_fix;
+                        $command          = 'cd ' . BP . ' && '. (IS_WIN ? 'start /min ' : 'nohup ') . $process_name . ' > ' . $process_log_path . $command_fix;
                         Process::setProcessOutput($task->execute_name(), $command . PHP_EOL);
                         $process = proc_open($command, $descriptorspec, $procPipes);
                         Process::setProcessOutput($task->execute_name(), json_encode($process) . PHP_EOL);
