@@ -16,6 +16,42 @@ use Weline\Framework\App\Env;
 
 class Process
 {
+    static public function initTaskName(string $pname)
+    {
+        $speicials = [
+            ' ','\'','"',
+        ];
+        foreach ($speicials as $special) {
+            $pname = str_replace($special, '-', $pname);
+        }
+        return $pname;
+    }
+    static public function create(string $process_name):int
+    {
+        $descriptorspec = array(
+            0 => array('pipe', 'r'),   // 子进程将从此管道读取stdin
+            1 => array('pipe', 'w'),   // 子进程将向此管道写入stdout
+            2 => array('pipe', 'w')    // 子进程将向此管道写入stderr
+        );
+        # 创建异步程序
+        $process_log_path = Process::getLogProcessFilePath($process_name);
+        $command_fix      = !IS_WIN ? ' 2>&1 & echo $!' : '';
+        $command          = 'cd ' . BP . ' && ' . (IS_WIN ? 'start /min' : 'nohup') . ' ' . $process_name . ' > "' . $process_log_path . '" ' . $command_fix;
+        Process::setProcessOutput($process_name, $command . PHP_EOL);
+        $process = proc_open($command, $descriptorspec, $procPipes);
+        Process::setProcessOutput($process_name, json_encode($process) . PHP_EOL);
+        # 设置进程非阻塞
+        stream_set_blocking($procPipes[1], false);
+        if (is_resource($process)) {
+            $pid =  Process::getPidByName($process_name);
+            // 关闭文件指针
+            fclose($procPipes[0]);
+            fclose($procPipes[1]);
+            fclose($procPipes[2]);
+            return $pid;
+        }
+        return 0;
+    }
     static public function getPPid(int $pid)
     {
         if (IS_WIN) {
@@ -30,7 +66,21 @@ class Process
 
     static public function getLogProcessFilePath(string $pname)
     {
-        $path = Env::VAR_DIR . 'cron' . DS . str_replace('\'"', '', $pname) . '.log';
+        # 取出进程名称
+        $names = [
+            '-name','-process'
+        ];
+        foreach ($names as $name) {
+            if(str_contains($pname, $name)){
+                $pname = trim($pname);
+                $pname = explode($name, $pname);
+                $pname = $pname[1];
+                $pname = trim($pname);
+                $pname = explode(' ', $pname);
+                $pname = $pname[0];
+            }
+        }
+        $path = Env::VAR_DIR . 'cron' . DS . Process::initTaskName($pname) . '.log';
         if (!is_file($path)) {
             if (!is_dir(dirname($path))) {
                 mkdir(dirname($path), 0777, true);
