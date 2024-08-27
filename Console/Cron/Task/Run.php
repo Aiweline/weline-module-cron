@@ -47,15 +47,14 @@ class Run implements CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        array_shift($args);
-        $force   = is_int(array_search('-f', $args)) || is_int(array_search('-force', $args));
-        $process = is_int(array_search('-p', $args)) || is_int(array_search('-process', $args));
+        $force   = $args['f'] ?? $args['force'] ?? false;
+        $process = $args['p'] ?? $args['process'] ?? false;
         foreach ($args as $key => $arg) {
-            if ($arg == '-f' || $arg == '-force' || $arg == '-p' || $arg == '-process') {
+            if (!is_int($key) || str_starts_with((string)$arg, '-')) {
                 unset($args[$key]);
             }
         }
-        unset($args['format']);
+        array_shift($args);
         $task_names = $args;
         if (!is_bool($force)) {
             # 解锁任务
