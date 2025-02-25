@@ -13,21 +13,29 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Schedule\Linux;
 
+use Weline\Cron\Schedule\Schedule;
 use Weline\Framework\App\Env;
 
 class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
 {
+
     public function create(string $name): array
     {
         #生成shell脚本
-        $base_project_dir     = BP;
+        $base_project_dir = BP;
         $cron_shell_file_path = Env::path_framework_generated . $name . '-cron.sh';
         $php_binary = PHP_BINARY;
-        $shell_string         = "
+        $log = BP . 'var/cron.log';
+        if (!file_exists($log)) {
+            if (!is_dir(dirname($log))) {
+                mkdir(dirname($log), 0777, true);
+            }
+            file_put_contents($log, '');
+        }
+        $shell_string = "
 #!/bin/sh
 cd $base_project_dir &&
-$php_binary bin/m cron:task:run
-        ";
+$php_binary bin/w cron:task:run 2>&1 >> $log";
         file_put_contents($cron_shell_file_path, $shell_string);
         if (is_string($name) && !empty($name) && $this->exist($name) === false) {
             exec(
@@ -43,7 +51,7 @@ $php_binary bin/m cron:task:run
     {
         $base_project_dir = BP;
         $php_binary = PHP_BINARY;
-        exec("cd $base_project_dir && $php_binary bin/m cron:task:run", $output);
+        exec("cd $base_project_dir && $php_binary bin/w cron:task:run", $output);
         return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功运行!', $name), 'result' => $output];
     }
 
@@ -78,6 +86,9 @@ $php_binary bin/m cron:task:run
     public function getJobs(): array
     {
         exec('crontab -l', $crontab);
-        return $crontab;
+        $weline_crons = array_filter($crontab, function ($item) {
+            return str_contains($item, Schedule::cron_flag);
+        });
+        return $weline_crons;
     }
 }

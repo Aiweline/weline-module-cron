@@ -12,7 +12,9 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Console\Cron\Task;
 
+use Weline\Cron\CronTaskInterface;
 use Weline\Cron\Model\CronTask;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -40,7 +42,7 @@ class Collect implements CommandInterface
         Printing $printing
     )
     {
-        $this->scan     = $scan;
+        $this->scan = $scan;
         $this->cronTask = $cronTask;
         $this->printing = $printing;
     }
@@ -49,10 +51,10 @@ class Collect implements CommandInterface
     {
         $modules = Env::getInstance()->getActiveModules();
         foreach ($modules as $module) {
-            if (is_dir($module['base_path'] . 'Cron')) {
+            if (is_dir($module['base_path'] . 'Console')) {
                 $tasks = [];
                 $this->scan->globFile(
-                    $module['base_path'] . 'Cron' . DS . '*',
+                    $module['base_path'] . 'Console' . DS . '*',
                     $tasks, '.php',
                     $module['base_path'],
                     $module['namespace_path'] . '\\',
@@ -62,16 +64,17 @@ class Collect implements CommandInterface
                 foreach ($tasks as $task) {
                     /**@var \Weline\Cron\CronTaskInterface $taskObject */
                     $taskObject = ObjectManager::getInstance($task);
-                    $this->cronTask->clearData()
-                                   ->setData(CronTask::fields_NAME, $taskObject->name(), true)
-                                   ->setData(CronTask::fields_EXECUTE_NAME, $taskObject->execute_name(), true)
-                                   ->setData(CronTask::fields_CLASS, $taskObject::class)
-                                   ->setData(CronTask::fields_TIP, $taskObject->tip())
-                                   ->setData(CronTask::fields_CRON_TIME, $taskObject->cron_time())
-                                   ->setData(CronTask::fields_BLOCK_UNLOCK_TIMEOUT, $taskObject->unlock_timeout())
-                                   ->setData(CronTask::fields_MODULE, $module['name'])
-                                   ->save();
-
+                    if ($taskObject instanceof CronTaskInterface) {
+                        $this->cronTask->clearData()
+                            ->setData(CronTask::fields_NAME, $taskObject->name())
+                            ->setData(CronTask::fields_EXECUTE_NAME, $taskObject->execute_name(), true)
+                            ->setData(CronTask::fields_CLASS, $taskObject::class)
+                            ->setData(CronTask::fields_TIP, $taskObject->tip())
+                            ->setData(CronTask::fields_CRON_TIME, $taskObject->cron_time())
+                            ->setData(CronTask::fields_BLOCK_UNLOCK_TIMEOUT, $taskObject->unlock_timeout())
+                            ->setData(CronTask::fields_MODULE, $module['name'])
+                            ->save();
+                    }
                 }
             }
         }
